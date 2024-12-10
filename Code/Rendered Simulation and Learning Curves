@@ -1,0 +1,74 @@
+# Define directories
+cwd = os.getcwd()
+video_dir = os.path.join(cwd, 'learned_dynamics')
+if not os.path.isdir(video_dir):
+    os.mkdir(video_dir)
+video_file = os.path.join(video_dir, "learned_dynamics.mp4")
+
+# Create the Pendulum environment
+simulated_env = gym.make('Pendulum-v1', g=9.81, render_mode="rgb_array")
+
+# Set up video recording
+video_recorder = VideoRecorder(simulated_env, video_file, enabled=True)
+
+# Reset the environment
+state = simulated_env.reset()
+if isinstance(state, tuple):  # Handle cases where reset returns a tuple
+    state = state[0]
+
+done = False
+
+# Perform an episode
+while not done:
+    video_recorder.capture_frame()
+
+    # Convert state to tensor
+    state_tensor = torch.tensor(state, dtype=torch.float32).view(1, -1)
+
+    # Predict action using the actor network
+    action = predictor_actor(state_tensor).detach().numpy()
+
+    # Ensure action is a single number (for Pendulum)
+    action = action.squeeze()  # Convert to scalar if it's an array of shape (1,)
+    action = np.clip(action, -max_action, max_action)
+
+    # Take a step in the environment
+    next_state, reward, done, truncated = simulated_env.step([action])  # Action must be a list for Pendulum
+    done = done or truncated
+    next_state[2] /= 10.0  # Normalize theta_dot
+    reward /= 1  # Normalize reward to [-1, 0]
+
+    # Transition to next state
+    state = next_state
+
+# Finalize video recording
+video_recorder.capture_frame()
+video_recorder.close()
+simulated_env.close()
+
+print(f"Video saved in folder {video_dir}")
+
+# Plot losses and rewards (assuming losses_critic, losses_actor, total_reward_list are defined)
+if len(losses_critic) > 0 and len(losses_actor) > 0:
+    plt.plot(moving_average(losses_critic, 10), label='Critic Loss')
+    plt.plot(moving_average(losses_actor, 10), label='Actor Loss')
+    plt.title("Losses for the Actor and the Critic Networks over 10 Moving Window")
+    plt.xlabel("Iterations")
+    plt.ylabel("Networks' Losses")
+    plt.legend()
+    plt.show()
+
+
+if len(total_reward_list) > 0:
+    plt.plot(total_reward_list)
+    plt.title("Total Rewards per Epoches")
+    plt.xlabel("Epoches")
+    plt.ylabel("Total Rewards")
+    plt.show()
+
+if len(total_reward_list) > 0:
+    plt.plot(moving_average(total_reward_list, 10))
+    plt.title("Total Rewards per Epoches over 10 Moving Window")
+    plt.xlabel("Epoches")
+    plt.ylabel("Total Rewards")
+    plt.show()
