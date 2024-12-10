@@ -1,0 +1,83 @@
+# Function to keep angles within the range [0, 360) degrees
+def normalize_angle_to_360(theta):
+    theta = np.rad2deg(theta)  # Convert to degrees
+    while theta < 0:
+        theta += 360
+    while theta >= 360:
+        theta -= 360
+    return theta
+
+# Number of random initial conditions to visualize
+num_trajectories = 5
+max_time_steps = 200  # Time limit for each trajectory
+
+# Store the data for plotting
+all_thetas = []
+all_theta_dots = []
+starting_points = []
+final_points = []
+
+for i in range(num_trajectories):
+    # Reset the environment and get the initial state
+    state = simulated_env.reset()
+    thetas = []
+    theta_dots = []
+
+    # Extract initial theta and theta_dot for bold marker
+    initial_theta = np.arctan2(state[1], state[0])  # Calculate the angle from cos(theta), sin(theta)
+    initial_theta_dot = state[2]
+    starting_points.append((normalize_angle_to_360(initial_theta), initial_theta_dot))
+
+    for t in range(max_time_steps):
+        theta = np.arctan2(state[1], state[0])  # Calculate the angle from cos(theta), sin(theta)
+        theta = normalize_angle_to_360(theta)  # Normalize angle to [0, 360)
+
+        theta_dot = state[2]
+
+        thetas.append(theta)
+        theta_dots.append(theta_dot)
+
+        state_tensor = torch.tensor(state, dtype=torch.float32).view(1, -1)
+
+        # Predict action using the actor network
+        action = predictor_actor(state_tensor).detach().numpy()
+        action = np.clip(action.squeeze(), -max_action, max_action)
+
+        # Take a step in the environment
+        next_state, reward, done, truncated = simulated_env.step([action])
+        done = done or truncated
+        next_state[2] /= 10.0  # Normalize theta_dot
+        reward /= 1
+
+        # Transition to next state
+        state = next_state
+
+        if done or truncated:
+            break
+
+    all_thetas.append(thetas)
+    all_theta_dots.append(theta_dots)
+    final_points.append((thetas[-1], theta_dots[-1]))
+
+# Plotting the phase diagram
+plt.figure(figsize=(10, 7))
+
+# Plot each trajectory with arrows
+for i in range(num_trajectories):
+    plt.plot(all_thetas[i], all_theta_dots[i], alpha=0.7, linewidth=1.5, label=f'Trajectory {i+1}' if i < 3 else '')
+
+# Highlight starting points with red dots
+starting_thetas, starting_theta_dots = zip(*starting_points)
+plt.scatter(starting_thetas, starting_theta_dots, color='red', s=50, label='Starting Points', edgecolors='black', linewidth=1.5)
+
+# Highlight final points with green dots
+final_thetas, final_theta_dots = zip(*final_points)
+plt.scatter(final_thetas, final_theta_dots, color='green', s=50, label='Final Points', edgecolors='black', linewidth=1.5)
+
+plt.xlabel(r'$\theta$ (degrees)', fontsize=14)
+plt.ylabel(r'$\dot{\theta}$ (radians/s)', fontsize=14)
+plt.title('Phase Diagram of Pendulum - angular velocities (rad/s) vs angles (degrees)', fontsize=16)
+plt.axhline(0, color='black', linestyle='--', linewidth=0.8)  # Horizontal line at y=0
+plt.axvline(0, color='black', linestyle='--', linewidth=0.8)  # Vertical line at x=0
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.show()
