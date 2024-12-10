@@ -1,0 +1,146 @@
+state_size = 3  # [cos(theta), sin(theta), theta_dot]
+action_size = 1  # Torque
+num_hidden = 2
+
+# Define networks
+predictor_actor = MLP(state_size, action_size, num_hidden, hidden_size=512)
+predictor_critic = MLP(state_size + action_size, 1, num_hidden, hidden_size=512)
+initialize_weights(predictor_actor)
+initialize_weights(predictor_critic)
+
+target_actor = MLP(state_size, action_size, num_hidden, hidden_size=512)
+target_critic = MLP(state_size + action_size, 1, num_hidden, hidden_size=512)
+initialize_weights(target_actor)
+initialize_weights(target_critic)
+
+# Training parameter
+gamma = 0.99
+max_epoche_number = 200
+batch_size = 128
+max_buffer_size = 50000
+max_action = 2.0  # Torque bounds in Pendulum-v1
+critic_learning_rate = 1e-3
+actor_learning_rate = 4e-4
+actor_loss = torch.tensor(0.0)
+
+optimiser_critic = optim.Adam(predictor_critic.parameters(), lr = critic_learning_rate)
+optimiser_actor = optim.Adam(predictor_actor.parameters(), lr = actor_learning_rate)
+
+state_list, action_list, reward_list, next_state_list = [], [], [], []
+total_reward_list, losses_critic, losses_actor = [], [], []
+
+epoch = 1
+previous_actor_loss = None  # Initialize previous actor loss
+
+while epoch <= max_epoche_number:
+
+    total_reward = 0
+    state = env.reset()
+    state[2] /= 10.0  # Normalize theta_dot
+    done = False
+    experience_counter = 0
+    decay_factor = 0.998** epoch
+
+    while not done:
+
+        state_tensor = torch.tensor(state, dtype=torch.float32).view(1, -1)
+        action = predictor_actor(state_tensor).detach().numpy()
+        noise_scale = max(0.7 * decay_factor, 0.05)
+        noisy_action = action + noise_scale * np.random.normal(0, 0.2, size=action.shape)
+        noisy_action = np.clip(noisy_action, -max_action, max_action)
+
+        next_state, reward, done, truncated = env.step(noisy_action)
+        done = done or truncated
+        next_state[2] /= 10.0  # Normalize theta_dot
+
+        # Store experience in the replay buffer
+        state_list.append(state)
+        action_list.append(noisy_action)
+        reward_list.append(reward)
+        next_state_list.append(next_state)
+        total_reward += reward
+        experience_counter += 1
+
+        # Trim buffer if necessary
+        if len(state_list) > max_buffer_size:
+            state_list = state_list[-max_buffer_size:]
+            action_list = action_list[-max_buffer_size:]
+            reward_list = reward_list[-max_buffer_size:]
+            next_state_list = next_state_list[-max_buffer_size:]
+
+        # Train if buffer has enough samples
+        if len(state_list) >= batch_size:
+            batched_state, batched_action, batched_reward, batched_next_state = batch_data(
+                state_list, action_list, reward_list, next_state_list, batch_size
+            )
+
+            target_miu = target_actor(batched_next_state)
+            target_q = target_critic(torch.cat([batched_next_state, target_miu], dim=1)).detach()
+            y = batched_reward + gamma * target_q
+
+            # Update critic
+            optimiser_critic.zero_grad()
+            critic_loss = MSE_loss(predictor_critic(torch.cat([batched_state, batched_action], dim=1)), y)
+            critic_loss.backward()
+            #torch.nn.utils.clip_grad_norm_(predictor_critic.parameters(), 1)  # Gradient clipping
+            optimiser_critic.step()
+
+            # Update actor
+            optimiser_actor.zero_grad()
+            actions_pred = predictor_actor(batched_state)
+            q_values = predictor_critic(torch.cat([batched_state, actions_pred], dim=1))
+            actor_loss = -q_values.mean()
+
+            for param_group in optimiser_actor.param_groups:
+                param_group['lr'] = -actor_learning_rate if actor_loss.item() < 0 else actor_learning_rate
+
+            actor_loss.backward()
+            #torch.nn.utils.clip_grad_norm_(predictor_actor.parameters(), 1.0)  # Gradient clipping
+            optimiser_actor.step()
+
+            # Update target networks
+            soft_update(target_actor, predictor_actor, tau = 0.005)
+            soft_update(target_critic, predictor_critic, tau = 0.005)
+
+            losses_critic.append(critic_loss.item())
+            losses_actor.append(actor_loss.item())
+
+
+        state = next_state
+
+    total_reward_list.append(total_reward)
+
+    # Update epoch
+    epoch += 1
+
+    # breaking the epoch loop after reaching the desired loss
+    if len(losses_actor) >= 20:
+        last_twenty_mean = sum(losses_actor[-20:]) / 20
+    else:
+       last_twenty_mean = sum(losses_actor[-20:]) / len(losses_actor)
+
+    #if last_twenty_mean < 0 and epoch > 10:
+     #   break
+
+    # Print progress
+    print(f"Epoch {epoch}, Total Reward: {sum(total_reward):.8f}, Actor Loss: {actor_loss.item():.16f}, Last Twenty Mean: {last_twenty_mean:.16f}")
+
+env.close()
+
+# Plotting results
+smoothed_actor_loss = moving_average(losses_actor, window_size=100)
+plt.plot(smoothed_actor_loss)
+plt.title("Actor Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.show()
+
+plt.plot(moving_average(losses_critic, 10))
+plt.plot(moving_average(losses_actor, 10))
+plt.legend(['critic', 'actor'])
+plt.title("Losses")
+plt.show()
+
+plt.plot(total_reward_list)
+plt.title("Total Rewards")
+plt.show()
