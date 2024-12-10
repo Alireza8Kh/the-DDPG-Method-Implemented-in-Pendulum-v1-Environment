@@ -1,0 +1,38 @@
+def initialize_weights(model):
+    for layer in model.modules():
+        if isinstance(layer, nn.Linear):  # Check if the layer is a linear layer
+            nn.init.xavier_uniform_(layer.weight)  # Xavier initialization for weights
+            if layer.bias is not None:  # Initialize biases to zeros
+                nn.init.constant_(layer.bias, 0)
+
+
+
+class MLP(nn.Module):
+
+    def __init__(self, input_size, output_size, num_hidden, hidden_size):
+        """
+        Initialise the network.
+        Input:
+            - input_size {int} - size of input to the network
+            - output_size {int} - size of output to the network
+            - num_hidden {int} - number of hidden layers
+            - hidden_size {int} - size of each hidden layer
+        """
+        super(MLP, self).__init__()
+        self.input_layer = nn.Linear(input_size, hidden_size) # First tranformation from the network input to the input of first hidden layer
+        self.hidden_layers = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_hidden-1)]) # All the hidden transformation
+        self.output_layer = nn.Linear(hidden_size, output_size) # Last tranformation from the last hidden layer output to the network output
+
+    def forward(self, x):
+        """
+        Get the output of the MLP.
+        Input: x {tensor} - one element or a batch of element
+        Ouput: y {tensor} - corresponding output
+        """
+        x.to(device)
+        x = self.input_layer(x) # Passing through the input layer
+        x = F.relu(x) # Applying Relu activation
+        for layer in self.hidden_layers:
+          x = layer(x) # Passing through each hidden layer
+          x = F.relu(x) # Applying Relu activation
+        x = self.output_layer(x) # Passing through the output layer
