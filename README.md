@@ -2,6 +2,8 @@ This repository contains the implementation of the Deep Deterministic Policy Gra
 
 The DDPG algorithm is applied to the Pendulum-v1 environment from OpenAI Gym.
 
+![Learned Dynamics](assets/learned_dynamics.gif)
+
 The DDPG method is a powerful off-policy Actor-Critic algorithm in Deep Reinforcement Learning, specifically designed
 for environments with continuous action spaces. This property makes DDPG highly effective for real-world applications, 
 such as robotics control, where continuous actions and precise manipulation are essential.
