@@ -1,0 +1,32 @@
+def MSE_loss(prediction, target):
+
+      return ((prediction - target)**2).sum(dim=-1).mean()
+
+def soft_update(target_network, predictor_network, tau):
+        """
+        Softly updates the parameters of the target network.
+        target_param = tau * predictor_param + (1 - tau) * target_param
+        """
+        for target_param, predictor_param in zip(target_network.parameters(), predictor_network.parameters()):
+            target_param.data.copy_(tau * predictor_param.data + (1.0 - tau) * target_param.data)
+
+def reset(self):
+        """Reset the noise process to the mean."""
+        self.x_prev = np.zeros_like(self.mu)
+
+def sample(self):
+        """Generate the next noise value."""
+        x = (
+            self.x_prev
+            + self.theta * (self.mu - self.x_prev) * self.dt
+            + self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.action_dim)
+        )
+        self.x_prev = x
+        return x
+
+def soft_update(target, source, tau):
+        for target_param, source_param in zip(target.parameters(), source.parameters()):
+            target_param.data.copy_(tau * source_param.data + (1 - tau) * target_param.data)
+
+def moving_average(data, window_size=10):
+      return [sum(data[i:i+window_size])/window_size for i in range(len(data) - window_size)]
