@@ -1,7 +1,7 @@
 This repository contains the implementation of the Deep Deterministic Policy Gradient (DDPG) method using PyTorch. 
 Additionally, I have prepared a comprehensive beginner tutorial regarding the DDPG algorithm, which can be accessed 
 as follows:
-[📘 View the DDPG Tutorial PDF](./DDPG_Tutorial.pdf)
+[📘 View the DDPG Tutorial PDF](./DDPG.pdf)
 
 The DDPG algorithm is applied to the Pendulum-v1 environment from OpenAI Gym.
 
